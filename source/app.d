@@ -2,20 +2,28 @@ import std.conv;
 import std.stdio;
 
 final class Value {
-	enum Tag { Bool, Int }
+	enum Tag { Bool, Int, Function }
+	struct FunctionData {
+		string[]   parameters;
+		Expression body_;
+	}
 	Tag tag;
 	union {
 		bool bool_;
 		int  int_;
+		FunctionData function_;
 	}
 	static Value Bool(bool value) { auto v = new Value; v.tag = Tag.Bool; v.bool_ = value; return v; }
-	static Value Int (int  value) { auto v = new Value; v.tag = Tag.Int ; v.int_  = value; return v; }
+	static Value Int(int value) { auto v = new Value; v.tag = Tag.Int; v.int_ = value; return v; }
+	static Value Function(string[] parameters, Expression body_) { auto v = new Value; v.tag = Tag.Function; v.function_ = FunctionData(parameters, body_); return v; }
 	bool isBool() const { return (tag == Tag.Bool); }
-	bool isInt () const { return (tag == Tag.Int ); }
+	bool isInt() const { return (tag == Tag.Int); }
+	bool isFunction() const { return (tag == Tag.Function); }
 	override string toString() const {
 		final switch(tag) with(Tag) {
-			case Bool: return (bool_ ? "true" : "false");
-			case Int:  return int_.to!string;
+			case Bool:     return (bool_ ? "true" : "false");
+			case Int:      return int_.to!string;
+			case Function: return "function";
 		}
 	}
 }
@@ -58,7 +66,7 @@ final class Variable : Expression {
 	}
 	override Reference evaluate(Environment env) {
 		assert(name in env.variables);
-		return Reference.LValue(env.variables[name]);
+		return env.variables[name];
 	}
 }
 
@@ -77,14 +85,36 @@ final class AddExpression : Expression {
 	}
 }
 
+final class FunctionCall : Expression {
+	Expression   function_;
+	Expression[] arguments;
+	this(Expression function_, Expression[] arguments) {
+		this.function_ = function_;
+		this.arguments = arguments;
+	}
+	override Reference evaluate(Environment env) {
+		auto f = function_.evaluate(env).value;
+		Reference[] args;
+		foreach(argument; arguments)
+			args ~= argument.evaluate(env);
+		assert(f.function_.parameters.length == args.length);
+
+		auto localEnv = new Environment;
+		foreach(i, parameter; f.function_.parameters)
+			localEnv.variables[parameter] = args[i];
+		return f.function_.body_.evaluate(localEnv);
+	}
+}
+
 final class Environment {
-	Value[string] variables;
+	Reference[string] variables;
 }
 
 void main() {
-	auto expression = new AddExpression(new IntLiteral(19), new Variable("x"));
+	auto expression = new FunctionCall(new Variable("+"), [new IntLiteral(19), new Variable("x")]);
 	auto env = new Environment;
-	env.variables["x"] = Value.Int(23);
+	env.variables["x"] = Reference.RValue(Value.Int(23));
+	env.variables["+"] = Reference.RValue(Value.Function(["x", "y"], new AddExpression(new Variable("x"), new Variable("y"))));
 	auto result = expression.evaluate(env);
 	writeln(result.value);
 }
