@@ -49,6 +49,59 @@ final class Reference {
 	}
 }
 
+struct Action {
+	enum Tag { Proceed, Return }
+	Tag tag;
+	union {
+		Reference returnValue;
+	}
+	static Action Proceed() { return Action(Tag.Proceed); }
+	static Action Return(Reference value) { Action a; a.tag = Tag.Return; a.returnValue = value; return a; }
+	bool isProceed() const { return (tag == Tag.Proceed); }
+	bool isReturn() const { return (tag == Tag.Return); }
+}
+
+final class Program {
+	Statement[] statements;
+	this(Statement[] statements) {
+		this.statements = statements;
+	}
+	Action execute(Environment env) {
+		foreach(statement; statements) {
+			auto action = statement.execute(env);
+			if(action.isReturn)
+				return action;
+		}
+		return Action.Proceed;
+	}
+}
+
+abstract class Statement {
+	abstract Action execute(Environment env);
+}
+
+final class ExpressionStatement : Statement {
+	Expression expression;
+	this(Expression expression) {
+		this.expression = expression;
+	}
+	override Action execute(Environment env) {
+		expression.evaluate(env);
+		return Action.Proceed;
+	}
+}
+
+final class ReturnStatement : Statement {
+	Expression expression;
+	this(Expression expression) {
+		this.expression = expression;
+	}
+	override Action execute(Environment env) {
+		auto result = expression.evaluate(env);
+		return Action.Return(result);
+	}
+}
+
 abstract class Expression {
 	abstract Reference evaluate(Environment env);
 }
@@ -106,7 +159,9 @@ final class Environment {
 }
 
 void main() {
-	auto expression = new FunctionCall(new Variable("+"), [new IntLiteral(19), new Variable("x")]);
+	auto program = new Program([
+		new ReturnStatement(new FunctionCall(new Variable("+"), [new IntLiteral(19), new Variable("x")]))
+	]);
 	auto env = new Environment;
 	env.variables["x"] = Reference.RValue(Value.Int(23));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
@@ -117,6 +172,7 @@ void main() {
 		assert(r.isInt);
 		return Reference.RValue(Value.Int(l.int_ + r.int_));
 	}));
-	auto result = expression.evaluate(env);
-	writeln(result.value);
+	auto action = program.execute(env);
+	if(action.isReturn)
+		writeln("result: ", action.returnValue.value);
 }
