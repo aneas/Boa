@@ -2,7 +2,7 @@ import std.conv;
 import std.stdio;
 
 final class Value {
-	enum Tag { Bool, Int, Function }
+	enum Tag { Bool, Int, Function, BuiltinFunction }
 	struct FunctionData {
 		string[]   parameters;
 		Expression body_;
@@ -12,18 +12,22 @@ final class Value {
 		bool bool_;
 		int  int_;
 		FunctionData function_;
+		Reference delegate(Reference[]) builtinFunction;
 	}
 	static Value Bool(bool value) { auto v = new Value; v.tag = Tag.Bool; v.bool_ = value; return v; }
 	static Value Int(int value) { auto v = new Value; v.tag = Tag.Int; v.int_ = value; return v; }
 	static Value Function(string[] parameters, Expression body_) { auto v = new Value; v.tag = Tag.Function; v.function_ = FunctionData(parameters, body_); return v; }
+	static Value BuiltinFunction(Reference delegate(Reference[]) value) { auto v = new Value; v.tag = Tag.BuiltinFunction; v.builtinFunction = value; return v; }
 	bool isBool() const { return (tag == Tag.Bool); }
 	bool isInt() const { return (tag == Tag.Int); }
 	bool isFunction() const { return (tag == Tag.Function); }
+	bool isBuiltinFunction() const { return (tag == Tag.BuiltinFunction); }
 	override string toString() const {
 		final switch(tag) with(Tag) {
-			case Bool:     return (bool_ ? "true" : "false");
-			case Int:      return int_.to!string;
-			case Function: return "function";
+			case Bool:            return (bool_ ? "true" : "false");
+			case Int:             return int_.to!string;
+			case Function:        return "function";
+			case BuiltinFunction: return "builtinFunction";
 		}
 	}
 }
@@ -70,21 +74,6 @@ final class Variable : Expression {
 	}
 }
 
-final class AddExpression : Expression {
-	Expression left, right;
-	this(Expression left, Expression right) {
-		this.left  = left;
-		this.right = right;
-	}
-	override Reference evaluate(Environment env) {
-		auto l = left.evaluate(env).value;
-		auto r = right.evaluate(env).value;
-		assert(l.isInt);
-		assert(r.isInt);
-		return Reference.RValue(Value.Int(l.int_ + r.int_));
-	}
-}
-
 final class FunctionCall : Expression {
 	Expression   function_;
 	Expression[] arguments;
@@ -97,12 +86,18 @@ final class FunctionCall : Expression {
 		Reference[] args;
 		foreach(argument; arguments)
 			args ~= argument.evaluate(env);
-		assert(f.function_.parameters.length == args.length);
 
-		auto localEnv = new Environment;
-		foreach(i, parameter; f.function_.parameters)
-			localEnv.variables[parameter] = args[i];
-		return f.function_.body_.evaluate(localEnv);
+		if(f.isFunction) {
+			assert(f.function_.parameters.length == args.length);
+			auto localEnv = new Environment;
+			foreach(i, parameter; f.function_.parameters)
+				localEnv.variables[parameter] = args[i];
+			return f.function_.body_.evaluate(localEnv);
+		}
+		else if(f.isBuiltinFunction)
+			return f.builtinFunction(args);
+		else
+			assert(false);
 	}
 }
 
@@ -114,7 +109,14 @@ void main() {
 	auto expression = new FunctionCall(new Variable("+"), [new IntLiteral(19), new Variable("x")]);
 	auto env = new Environment;
 	env.variables["x"] = Reference.RValue(Value.Int(23));
-	env.variables["+"] = Reference.RValue(Value.Function(["x", "y"], new AddExpression(new Variable("x"), new Variable("y"))));
+	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
+		assert(args.length == 2);
+		auto l = args[0].value;
+		assert(l.isInt);
+		auto r = args[1].value;
+		assert(r.isInt);
+		return Reference.RValue(Value.Int(l.int_ + r.int_));
+	}));
 	auto result = expression.evaluate(env);
 	writeln(result.value);
 }
