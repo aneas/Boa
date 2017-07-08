@@ -1,5 +1,9 @@
+import std.algorithm : startsWith;
+import std.array;
+import std.ascii : isDigit;
 import std.conv;
 import std.stdio;
+import std.uni : isAlpha;
 
 final class Value {
 	enum Tag { Bool, Int, Function, BuiltinFunction }
@@ -113,21 +117,6 @@ final class ReturnStatement : Statement {
 	}
 }
 
-final class Assignment : Statement {
-	Expression left, right;
-	this(Expression left, Expression right) {
-		this.left  = left;
-		this.right = right;
-	}
-	override Action execute(Environment env) {
-		auto l = left.evaluate(env);
-		assert(l.isLValue);
-		auto r = right.evaluate(env).value;
-		l.lvalue.assign(r);
-		return Action.Proceed;
-	}
-}
-
 abstract class Expression {
 	abstract Reference evaluate(Environment env);
 }
@@ -148,7 +137,7 @@ final class Variable : Expression {
 		this.name = name;
 	}
 	override Reference evaluate(Environment env) {
-		assert(name in env.variables);
+		assert(name in env.variables, name);
 		return env.variables[name];
 	}
 }
@@ -180,15 +169,108 @@ final class FunctionCall : Expression {
 	}
 }
 
+final class Assignment : Expression {
+	Expression left, right;
+	this(Expression left, Expression right) {
+		this.left  = left;
+		this.right = right;
+	}
+	override Reference evaluate(Environment env) {
+		auto l = left.evaluate(env);
+		assert(l.isLValue);
+		auto r = right.evaluate(env);
+		l.lvalue.assign(r.value);
+		return r;
+	}
+}
+
 final class Environment {
 	Reference[string] variables;
 }
 
+void skipWhitespace(ref string s) {
+	while(!s.empty) {
+		if(s[0] == ' ' || s[0] == '\t' || s[0] == '\r' || s[0] == '\n')
+			s.popFront();
+		else
+			break;
+	}
+}
+
+Program parseProgram(string s) {
+	Statement[] statements;
+	s.skipWhitespace();
+	while(!s.empty) {
+		auto statement = s.parseStatement();
+		statements ~= statement;
+		s.skipWhitespace();
+	}
+	return new Program(statements);
+}
+
+Statement parseStatement(ref string s) {
+	if(s.startsWith("return") && s.length > 6 && !s[6].isAlpha && !s[6].isDigit && s[6] != '_') {
+		s = s[6 .. $];
+		s.skipWhitespace();
+		auto expression = s.parseExpression();
+		assert(!s.empty);
+		assert(s[0] == ';');
+		s.popFront();
+		return new ReturnStatement(expression);
+	}
+	else {
+		auto expression = s.parseExpression();
+		assert(s[0] == ';');
+		s.popFront();
+		return new ExpressionStatement(expression);
+	}
+}
+
+Expression parseExpression(ref string s) {
+	auto expression = s.parseOperand();
+	auto backup = s;
+	s.skipWhitespace();
+	while(!s.empty && (s[0] == '+' || s[0] == '=')) {
+		auto operator = s[0 .. 1];
+		s.popFront();
+		s.skipWhitespace();
+		auto right = s.parseOperand();
+		if(operator == "=")
+			expression = new Assignment(expression, right);
+		else
+			expression = new FunctionCall(new Variable(operator), [expression, right]);
+		backup = s;
+		s.skipWhitespace();
+	}
+	s = backup;
+	return expression;
+}
+
+Expression parseOperand(ref string s) {
+	assert(!s.empty);
+	if(s[0].isAlpha) {
+		size_t length = 1;
+		while(length < s.length && (s[length].isAlpha || s[length] == '_'))
+			length++;
+		auto name = s[0 .. length];
+		s = s[length .. $];
+		return new Variable(name);
+	}
+	else if(s[0].isDigit) {
+		int value = s[0] - '0';
+		s.popFront;
+		while(!s.empty && s[0].isDigit) {
+			value = value * 10 + (s[0] - '0');
+			s.popFront();
+		}
+		return new IntLiteral(value);
+	}
+	else
+		assert(false);
+}
+
 void main() {
-	auto program = new Program([
-		new Assignment(new Variable("x"), new IntLiteral(23)),
-		new ReturnStatement(new FunctionCall(new Variable("+"), [new IntLiteral(19), new Variable("x")]))
-	]);
+	auto program = parseProgram("x = 23; return 19 + x;");
 	auto env = new Environment;
 	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
