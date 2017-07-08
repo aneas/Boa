@@ -22,6 +22,15 @@ final class Value {
 	bool isInt() const { return (tag == Tag.Int); }
 	bool isFunction() const { return (tag == Tag.Function); }
 	bool isBuiltinFunction() const { return (tag == Tag.BuiltinFunction); }
+	void assign(Value value) {
+		tag = value.tag;
+		final switch(tag) with(Tag) {
+			case Bool:            bool_ = value.bool_; break;
+			case Int:             int_ = value.int_; break;
+			case Function:        function_ = FunctionData(value.function_.parameters.dup, value.function_.body_); break;
+			case BuiltinFunction: builtinFunction = value.builtinFunction; break;
+		}
+	}
 	override string toString() const {
 		final switch(tag) with(Tag) {
 			case Bool:            return (bool_ ? "true" : "false");
@@ -41,6 +50,8 @@ final class Reference {
 	}
 	static Reference LValue(Value value) { auto r = new Reference; r.tag = Tag.LValue; r.lvalue = value; return r; }
 	static Reference RValue(Value value) { auto r = new Reference; r.tag = Tag.RValue; r.rvalue = value; return r; }
+	bool isLValue() const { return (tag == Tag.LValue); }
+	bool isRValue() const { return (tag == Tag.RValue); }
 	Value value() {
 		final switch(tag) with(Tag) {
 			case LValue: return lvalue;
@@ -102,6 +113,21 @@ final class ReturnStatement : Statement {
 	}
 }
 
+final class Assignment : Statement {
+	Expression left, right;
+	this(Expression left, Expression right) {
+		this.left  = left;
+		this.right = right;
+	}
+	override Action execute(Environment env) {
+		auto l = left.evaluate(env);
+		assert(l.isLValue);
+		auto r = right.evaluate(env).value;
+		l.lvalue.assign(r);
+		return Action.Proceed;
+	}
+}
+
 abstract class Expression {
 	abstract Reference evaluate(Environment env);
 }
@@ -160,10 +186,11 @@ final class Environment {
 
 void main() {
 	auto program = new Program([
+		new Assignment(new Variable("x"), new IntLiteral(23)),
 		new ReturnStatement(new FunctionCall(new Variable("+"), [new IntLiteral(19), new Variable("x")]))
 	]);
 	auto env = new Environment;
-	env.variables["x"] = Reference.RValue(Value.Int(23));
+	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
 		assert(args.length == 2);
 		auto l = args[0].value;
