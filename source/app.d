@@ -117,6 +117,17 @@ final class ReturnStatement : Statement {
 	}
 }
 
+final class VarStatement : Statement {
+	string identifier;
+	this(string identifier) {
+		this.identifier = identifier;
+	}
+	override Action execute(Environment env) {
+		env.variables[identifier] = Reference.LValue(Value.Int(0));
+		return Action.Proceed;
+	}
+}
+
 abstract class Expression {
 	abstract Reference evaluate(Environment env);
 }
@@ -280,6 +291,16 @@ Statement parseStatement(ref string s) {
 		s.skipToken();
 		return new ReturnStatement(expression);
 	}
+	else if(s.peekToken == "var") {
+		s.skipToken();
+		s.skipWhitespace();
+		auto token = s.fetchToken();
+		assert(token == Token.Type.Identifier);
+		s.skipWhitespace();
+		assert(s.peekToken == ";");
+		s.skipToken();
+		return new VarStatement(token.value);
+	}
 	else {
 		auto expression = s.parseExpression();
 		s.skipWhitespace();
@@ -322,7 +343,7 @@ Expression parseOperand(ref string s) {
 }
 
 void main() {
-	auto program = parseProgram("x = 23; return 19 + x;");
+	auto program = parseProgram("x = 23; var y; y = 19; return y + x;");
 	auto env = new Environment;
 	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
