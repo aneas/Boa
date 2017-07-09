@@ -1,4 +1,4 @@
-import std.algorithm : startsWith;
+import std.algorithm : map, startsWith;
 import std.array;
 import std.ascii : isDigit;
 import std.conv;
@@ -6,7 +6,7 @@ import std.stdio;
 import std.uni : isAlpha;
 
 final class Value {
-	enum Tag { Bool, Int, Function, BuiltinFunction }
+	enum Tag { Bool, Int, Function, BuiltinFunction, Array }
 	struct FunctionData {
 		string[]   parameters;
 		Expression body_;
@@ -17,15 +17,18 @@ final class Value {
 		int  int_;
 		FunctionData function_;
 		Reference delegate(Reference[]) builtinFunction;
+		Value[] arrayElements;
 	}
 	static Value Bool(bool value) { auto v = new Value; v.tag = Tag.Bool; v.bool_ = value; return v; }
 	static Value Int(int value) { auto v = new Value; v.tag = Tag.Int; v.int_ = value; return v; }
 	static Value Function(string[] parameters, Expression body_) { auto v = new Value; v.tag = Tag.Function; v.function_ = FunctionData(parameters, body_); return v; }
 	static Value BuiltinFunction(Reference delegate(Reference[]) value) { auto v = new Value; v.tag = Tag.BuiltinFunction; v.builtinFunction = value; return v; }
+	static Value Array(Value[] elements) { auto v = new Value; v.tag = Tag.Array; v.arrayElements = elements; return v; }
 	bool isBool() const { return (tag == Tag.Bool); }
 	bool isInt() const { return (tag == Tag.Int); }
 	bool isFunction() const { return (tag == Tag.Function); }
 	bool isBuiltinFunction() const { return (tag == Tag.BuiltinFunction); }
+	bool isArray() const { return (tag == Tag.Array); }
 	void assign(Value value) {
 		tag = value.tag;
 		final switch(tag) with(Tag) {
@@ -33,6 +36,7 @@ final class Value {
 			case Int:             int_ = value.int_; break;
 			case Function:        function_ = FunctionData(value.function_.parameters.dup, value.function_.body_); break;
 			case BuiltinFunction: builtinFunction = value.builtinFunction; break;
+			case Array:           arrayElements = value.arrayElements.dup; break;
 		}
 	}
 	override string toString() const {
@@ -41,6 +45,7 @@ final class Value {
 			case Int:             return int_.to!string;
 			case Function:        return "function";
 			case BuiltinFunction: return "builtinFunction";
+			case Array:           return ("[" ~ arrayElements.map!"a.toString".join(", ") ~ "]");
 		}
 	}
 }
@@ -142,6 +147,19 @@ final class IntLiteral : Expression {
 	}
 }
 
+final class ArrayLiteral : Expression {
+	Expression[] elements;
+	this(Expression[] elements) {
+		this.elements = elements;
+	}
+	override Reference evaluate(Environment env) {
+		Value[] es;
+		foreach(element; elements)
+			es ~= element.evaluate(env).value;
+		return Reference.RValue(Value.Array(es));
+	}
+}
+
 final class Variable : Expression {
 	string name;
 	this(string name) {
@@ -224,7 +242,7 @@ Token fetchToken(ref string s) {
 				length++;
 			return s.fetchToken(length, Token.Type.Whitespace);
 
-		case ';':
+		case ',': case ';': case '[': case ']':
 			return s.fetchToken(1, Token.Type.Delimiter);
 
 		case '+': case '=':
@@ -338,12 +356,30 @@ Expression parseOperand(ref string s) {
 			value = value * 10 + (c - '0');
 		return new IntLiteral(value);
 	}
+	else if(s.peekToken == "[") {
+		s.skipToken();
+		s.skipWhitespace();
+		Expression[] elements;
+		if(s.peekToken != "]") {
+			elements ~= s.parseExpression();
+			s.skipWhitespace();
+			while(s.peekToken == ",") {
+				s.skipToken();
+				s.skipWhitespace();
+				elements ~= s.parseExpression();
+				s.skipWhitespace();
+			}
+		}
+		assert(s.peekToken == "]");
+		s.skipToken();
+		return new ArrayLiteral(elements);
+	}
 	else
 		assert(false);
 }
 
 void main() {
-	auto program = parseProgram("x = 23; var y; y = 19; return y + x;");
+	auto program = parseProgram("x = 23; var y; y = 19; return [y + x, 24];");
 	auto env = new Environment;
 	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
