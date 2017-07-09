@@ -21,6 +21,20 @@ final class IntLiteral : Expression {
 }
 
 
+final class StringLiteral : Expression {
+	string value;
+	this(string value) {
+		this.value = value;
+	}
+	override Reference evaluate(Environment env) {
+		Value[] chars;
+		foreach(char c; value)
+			chars ~= Value.Char(c);
+		return Reference.RValue(Value.Array(chars));
+	}
+}
+
+
 final class ArrayLiteral : Expression {
 	Expression[] elements;
 	this(Expression[] elements) {

@@ -12,7 +12,7 @@ import boa.statements;
 
 
 struct Token {
-	enum Type { Whitespace, Operator, Delimiter, Keyword, Identifier, Integer, Eof }
+	enum Type { Whitespace, Operator, Delimiter, Keyword, Identifier, Integer, String, Eof }
 	Type   type;
 	string value;
 	bool opEquals(Type t) const { return (type == t); }
@@ -45,6 +45,19 @@ Token fetchToken(ref string s) {
 
 		case '+': case '*': case '=':
 			return s.fetchToken(1, Token.Type.Operator);
+
+		case '"':
+			size_t length = 1;
+			while(length < s.length && s[length] != '"') {
+				if(s[length] == '\\' && length + 1 < s.length)
+					length += 2;
+				else
+					length++;
+			}
+			assert(length < s.length);
+			assert(s[length] == '"');
+			length++;
+			return s.fetchToken(length, Token.Type.String);
 
 		default:
 			if(s[0].isAlpha) {
@@ -263,6 +276,11 @@ Expression parsePrimary(ref string s) {
 		assert(s.peekToken == ")");
 		s.skipToken();
 		return expression;
+	}
+	else if(s.peekToken == Token.Type.String) {
+		auto token = s.fetchToken();
+		assert(token.value.length >= 2);
+		return new StringLiteral(token.value[1 .. $ - 1]);
 	}
 	else
 		assert(false);
