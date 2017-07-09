@@ -2,6 +2,7 @@ import std.algorithm : map, startsWith;
 import std.array;
 import std.ascii : isDigit;
 import std.conv;
+import std.file : exists, readText;
 import std.stdio;
 import std.uni : isAlpha;
 
@@ -437,8 +438,16 @@ Expression parsePrimary(ref string s) {
 		assert(false);
 }
 
-void main() {
-	auto program = parseProgram("x = 23; var y; y = 19; writeln([y + x, 24][0]);");
+void main(string[] args) {
+	if(args.length != 2 || !exists(args[1])) {
+		writeln("usage: boa filename");
+		return;
+	}
+
+	auto filename = args[1];
+	auto contents = readText(filename);
+	auto program  = parseProgram(contents);
+
 	auto env = new Environment;
 	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
