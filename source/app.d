@@ -264,7 +264,7 @@ Token fetchToken(ref string s) {
 				length++;
 			return s.fetchToken(length, Token.Type.Whitespace);
 
-		case ',': case ';': case '[': case ']':
+		case ',': case ';': case '[': case ']': case '(': case ')':
 			return s.fetchToken(1, Token.Type.Delimiter);
 
 		case '+': case '=':
@@ -372,14 +372,36 @@ Expression parseExpression(ref string s) {
 
 Expression parseOperand(ref string s) {
 	auto expression = s.parsePrimary();
-	while(s.peekTokenAfterWhitespace == "[") {
-		s.skipWhitespace();
-		s.skipToken();
-		s.skipWhitespace();
-		auto index = s.parseExpression();
-		assert(s.peekToken == "]");
-		s.skipToken();
-		expression = new IndexExpression(expression, index);
+	while(true) {
+		if(s.peekTokenAfterWhitespace == "[") {
+			s.skipWhitespace();
+			s.skipToken();
+			s.skipWhitespace();
+			auto index = s.parseExpression();
+			assert(s.peekToken == "]");
+			s.skipToken();
+			expression = new IndexExpression(expression, index);
+		}
+		else if(s.peekTokenAfterWhitespace == "(") {
+			s.skipWhitespace();
+			s.skipToken();
+			Expression[] arguments;
+			if(s.peekToken != ")") {
+				arguments ~= s.parseExpression();
+				s.skipWhitespace();
+				while(s.peekToken == ",") {
+					s.skipToken();
+					s.skipWhitespace();
+					arguments ~= s.parseExpression();
+					s.skipWhitespace();
+				}
+			}
+			assert(s.peekToken == ")");
+			s.skipToken();
+			expression = new FunctionCall(expression, arguments.dup);
+		}
+		else
+			break;
 	}
 	return expression;
 }
@@ -416,7 +438,7 @@ Expression parsePrimary(ref string s) {
 }
 
 void main() {
-	auto program = parseProgram("x = 23; var y; y = 19; return [y + x, 24][0];");
+	auto program = parseProgram("x = 23; var y; y = 19; writeln([y + x, 24][0]);");
 	auto env = new Environment;
 	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
@@ -427,7 +449,11 @@ void main() {
 		assert(r.isInt);
 		return Reference.RValue(Value.Int(l.int_ + r.int_));
 	}));
-	auto action = program.execute(env);
-	if(action.isReturn)
-		writeln("result: ", action.returnValue.value);
+	env.variables["writeln"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
+		foreach(arg; args)
+			write(arg.value);
+		writeln();
+		return Reference.RValue(Value.Int(0));
+	}));
+	program.execute(env);
 }
