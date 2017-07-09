@@ -449,7 +449,6 @@ void main(string[] args) {
 	auto program  = parseProgram(contents);
 
 	auto env = new Environment;
-	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
 		assert(args.length == 2);
 		auto l = args[0].value;
