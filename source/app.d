@@ -213,6 +213,28 @@ final class Assignment : Expression {
 	}
 }
 
+final class IndexExpression : Expression {
+	Expression expression, index;
+	this(Expression expression, Expression index) {
+		this.expression = expression;
+		this.index      = index;
+	}
+	override Reference evaluate(Environment env) {
+		auto l = expression.evaluate(env);
+		assert(l.value.isArray);
+
+		auto r = index.evaluate(env).value;
+		assert(r.isInt);
+		assert(r.int_ >= 0);
+		assert(r.int_ < l.value.arrayElements.length);
+
+		if(l.isLValue)
+			return Reference.LValue(l.value.arrayElements[r.int_]);
+		else
+			return Reference.RValue(l.value.arrayElements[r.int_]);
+	}
+}
+
 final class Environment {
 	Reference[string] variables;
 }
@@ -277,6 +299,11 @@ void skipToken(ref string s) {
 	s.fetchToken();
 }
 
+Token peekTokenAfterWhitespace(string s) {
+	s.skipWhitespace();
+	return s.peekToken();
+}
+
 void skipWhitespace(ref string s) {
 	while(s.peekToken == Token.Type.Whitespace)
 		s.skipToken();
@@ -330,9 +357,8 @@ Statement parseStatement(ref string s) {
 
 Expression parseExpression(ref string s) {
 	auto expression = s.parseOperand();
-	auto backup = s;
-	s.skipWhitespace();
-	while(s.peekToken == Token.Type.Operator) {
+	while(s.peekTokenAfterWhitespace == Token.Type.Operator) {
+		s.skipWhitespace();
 		auto operator = s.fetchToken.value;
 		s.skipWhitespace();
 		auto right = s.parseOperand();
@@ -340,14 +366,25 @@ Expression parseExpression(ref string s) {
 			expression = new Assignment(expression, right);
 		else
 			expression = new FunctionCall(new Variable(operator), [expression, right]);
-		backup = s;
-		s.skipWhitespace();
 	}
-	s = backup;
 	return expression;
 }
 
 Expression parseOperand(ref string s) {
+	auto expression = s.parsePrimary();
+	while(s.peekTokenAfterWhitespace == "[") {
+		s.skipWhitespace();
+		s.skipToken();
+		s.skipWhitespace();
+		auto index = s.parseExpression();
+		assert(s.peekToken == "]");
+		s.skipToken();
+		expression = new IndexExpression(expression, index);
+	}
+	return expression;
+}
+
+Expression parsePrimary(ref string s) {
 	if(s.peekToken == Token.Type.Identifier)
 		return new Variable(s.fetchToken.value);
 	else if(s.peekToken == Token.Type.Integer) {
@@ -379,7 +416,7 @@ Expression parseOperand(ref string s) {
 }
 
 void main() {
-	auto program = parseProgram("x = 23; var y; y = 19; return [y + x, 24];");
+	auto program = parseProgram("x = 23; var y; y = 19; return [y + x, 24][0];");
 	auto env = new Environment;
 	env.variables["x"] = Reference.LValue(Value.Int(3));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
