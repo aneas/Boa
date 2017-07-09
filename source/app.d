@@ -268,7 +268,7 @@ Token fetchToken(ref string s) {
 		case ',': case ';': case '[': case ']': case '(': case ')':
 			return s.fetchToken(1, Token.Type.Delimiter);
 
-		case '+': case '=':
+		case '+': case '*': case '=':
 			return s.fetchToken(1, Token.Type.Operator);
 
 		default:
@@ -456,6 +456,14 @@ void main(string[] args) {
 		auto r = args[1].value;
 		assert(r.isInt);
 		return Reference.RValue(Value.Int(l.int_ + r.int_));
+	}));
+	env.variables["*"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
+		assert(args.length == 2);
+		auto l = args[0].value;
+		assert(l.isInt);
+		auto r = args[1].value;
+		assert(r.isInt);
+		return Reference.RValue(Value.Int(l.int_ * r.int_));
 	}));
 	env.variables["writeln"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
 		foreach(arg; args)
