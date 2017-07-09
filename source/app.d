@@ -1,4 +1,4 @@
-import std.algorithm : map, startsWith;
+import std.algorithm : canFind, map, startsWith;
 import std.array;
 import std.ascii : isDigit;
 import std.conv;
@@ -9,8 +9,9 @@ import std.uni : isAlpha;
 final class Value {
 	enum Tag { Bool, Int, Function, BuiltinFunction, Array }
 	struct FunctionData {
-		string[]   parameters;
-		Expression body_;
+		string[]          parameters;
+		Reference[string] closure;
+		Statement         body_;
 	}
 	Tag tag;
 	union {
@@ -22,7 +23,7 @@ final class Value {
 	}
 	static Value Bool(bool value) { auto v = new Value; v.tag = Tag.Bool; v.bool_ = value; return v; }
 	static Value Int(int value) { auto v = new Value; v.tag = Tag.Int; v.int_ = value; return v; }
-	static Value Function(string[] parameters, Expression body_) { auto v = new Value; v.tag = Tag.Function; v.function_ = FunctionData(parameters, body_); return v; }
+	static Value Function(string[] parameters, Reference[string] closure, Statement body_) { auto v = new Value; v.tag = Tag.Function; v.function_ = FunctionData(parameters, closure, body_); return v; }
 	static Value BuiltinFunction(Reference delegate(Reference[]) value) { auto v = new Value; v.tag = Tag.BuiltinFunction; v.builtinFunction = value; return v; }
 	static Value Array(Value[] elements) { auto v = new Value; v.tag = Tag.Array; v.arrayElements = elements; return v; }
 	bool isBool() const { return (tag == Tag.Bool); }
@@ -35,7 +36,7 @@ final class Value {
 		final switch(tag) with(Tag) {
 			case Bool:            bool_ = value.bool_; break;
 			case Int:             int_ = value.int_; break;
-			case Function:        function_ = FunctionData(value.function_.parameters.dup, value.function_.body_); break;
+			case Function:        function_ = FunctionData(value.function_.parameters.dup, value.function_.closure, value.function_.body_); break;
 			case BuiltinFunction: builtinFunction = value.builtinFunction; break;
 			case Array:           arrayElements = value.arrayElements.dup; break;
 		}
@@ -99,6 +100,26 @@ final class Program {
 
 abstract class Statement {
 	abstract Action execute(Environment env);
+}
+
+final class FunctionDeclaration : Statement {
+	string    name;
+	string[]  parameters;
+	Statement body_;
+	this(string name, string[] parameters, Statement body_) {
+		this.name       = name;
+		this.parameters = parameters;
+		this.body_      = body_;
+	}
+	override Action execute(Environment env) {
+		Reference[string] closure;
+		foreach(name, value; env.variables)
+			closure[name] = value;
+
+		env.variables[name] = Reference.RValue(Value.Function(parameters, closure, body_));
+		env.variables[name].rvalue.function_.closure[name] = env.variables[name]; // add self to support recursion
+		return Action.Proceed;
+	}
 }
 
 final class ExpressionStatement : Statement {
@@ -188,9 +209,15 @@ final class FunctionCall : Expression {
 		if(f.isFunction) {
 			assert(f.function_.parameters.length == args.length);
 			auto localEnv = new Environment;
+			foreach(name, value; f.function_.closure)
+				localEnv.variables[name] = value;
 			foreach(i, parameter; f.function_.parameters)
 				localEnv.variables[parameter] = args[i];
-			return f.function_.body_.evaluate(localEnv);
+			auto action = f.function_.body_.execute(localEnv);
+			if(action.isReturn)
+				return action.returnValue;
+			else
+				return Reference.RValue(Value.Int(0));
 		}
 		else if(f.isBuiltinFunction)
 			return f.builtinFunction(args);
@@ -255,6 +282,8 @@ Token fetchToken(ref string s, size_t length, Token.Type type) {
 }
 
 Token fetchToken(ref string s) {
+	static Keywords = ["function", "return"];
+
 	if(s.empty)
 		return Token(Token.Type.Eof, s);
 
@@ -265,7 +294,7 @@ Token fetchToken(ref string s) {
 				length++;
 			return s.fetchToken(length, Token.Type.Whitespace);
 
-		case ',': case ';': case '[': case ']': case '(': case ')':
+		case ',': case ';': case '[': case ']': case '(': case ')': case '{': case '}':
 			return s.fetchToken(1, Token.Type.Delimiter);
 
 		case '+': case '*': case '=':
@@ -276,7 +305,7 @@ Token fetchToken(ref string s) {
 				size_t length = 1;
 				while(length < s.length && (s[length].isAlpha || s[length].isDigit || s[length] == '_'))
 					length++;
-				if(s[0 .. length] == "return")
+				if(Keywords.canFind(s[0 .. length]))
 					return s.fetchToken(length, Token.Type.Keyword);
 				else
 					return s.fetchToken(length, Token.Type.Identifier);
@@ -328,7 +357,44 @@ Program parseProgram(string s) {
 }
 
 Statement parseStatement(ref string s) {
-	if(s.peekToken == "return") {
+	if(s.peekToken == "function") {
+		s.skipToken();
+		s.skipWhitespace();
+		assert(s.peekToken == Token.Type.Identifier);
+		auto name = s.peekToken().value;
+		s.skipToken();
+		s.skipWhitespace();
+		assert(s.peekToken == "(");
+		s.skipToken();
+		s.skipWhitespace();
+		string[] parameters;
+		if(s.peekToken != ")") {
+			assert(s.peekToken == Token.Type.Identifier);
+			parameters ~= s.peekToken.value;
+			s.skipToken();
+			s.skipWhitespace();
+			while(s.peekToken == ",") {
+				s.skipToken();
+				s.skipWhitespace();
+				assert(s.peekToken == Token.Type.Identifier);
+				parameters ~= s.peekToken.value;
+				s.skipToken();
+				s.skipWhitespace();
+			}
+		}
+		assert(s.peekToken == ")");
+		s.skipToken();
+		s.skipWhitespace();
+		assert(s.peekToken == "{");
+		s.skipToken();
+		s.skipWhitespace();
+		auto body_ = s.parseStatement();
+		s.skipWhitespace();
+		assert(s.peekToken == "}");
+		s.skipToken();
+		return new FunctionDeclaration(name, parameters, body_);
+	}
+	else if(s.peekToken == "return") {
 		s.skipToken();
 		s.skipWhitespace();
 		auto expression = s.parseExpression();
