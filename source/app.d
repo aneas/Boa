@@ -188,7 +188,69 @@ final class Environment {
 	Reference[string] variables;
 }
 
+struct Token {
+	enum Type { Whitespace, Operator, Delimiter, Keyword, Identifier, Integer, Eof }
+	Type   type;
+	string value;
+	bool opEquals(Type t) const { return (type == t); }
+	bool opEquals(string s) const { return (value == s); }
+}
+
+Token fetchToken(ref string s, size_t length, Token.Type type) {
+	auto value = s[0 .. length];
+	s = s[length .. $];
+	return Token(type, value);
+}
+
+Token fetchToken(ref string s) {
+	if(s.empty)
+		return Token(Token.Type.Eof, s);
+
+	switch(s[0]) {
+		case ' ': case '\t': case '\r': case '\n':
+			size_t length = 1;
+			while(length < s.length && (s[length] == ' ' || s[length] == '\t' || s[length] == '\r' || s[length] == '\n'))
+				length++;
+			return s.fetchToken(length, Token.Type.Whitespace);
+
+		case ';':
+			return s.fetchToken(1, Token.Type.Delimiter);
+
+		case '+': case '=':
+			return s.fetchToken(1, Token.Type.Operator);
+
+		default:
+			if(s[0].isAlpha) {
+				size_t length = 1;
+				while(length < s.length && (s[length].isAlpha || s[length].isDigit || s[length] == '_'))
+					length++;
+				if(s[0 .. length] == "return")
+					return s.fetchToken(length, Token.Type.Keyword);
+				else
+					return s.fetchToken(length, Token.Type.Identifier);
+			}
+			else if(s[0].isDigit) {
+				size_t length = 1;
+				while(length < s.length && s[length].isDigit)
+					length++;
+				return s.fetchToken(length, Token.Type.Integer);
+			}
+			else
+				assert(false);
+	}
+}
+
+Token peekToken(string s) {
+	return s.fetchToken();
+}
+
+void skipToken(ref string s) {
+	s.fetchToken();
+}
+
 void skipWhitespace(ref string s) {
+	while(s.peekToken == Token.Type.Whitespace)
+		s.skipToken();
 	while(!s.empty) {
 		if(s[0] == ' ' || s[0] == '\t' || s[0] == '\r' || s[0] == '\n')
 			s.popFront();
@@ -209,19 +271,20 @@ Program parseProgram(string s) {
 }
 
 Statement parseStatement(ref string s) {
-	if(s.startsWith("return") && s.length > 6 && !s[6].isAlpha && !s[6].isDigit && s[6] != '_') {
-		s = s[6 .. $];
+	if(s.peekToken == "return") {
+		s.skipToken();
 		s.skipWhitespace();
 		auto expression = s.parseExpression();
-		assert(!s.empty);
-		assert(s[0] == ';');
-		s.popFront();
+		s.skipWhitespace();
+		assert(s.peekToken == ";");
+		s.skipToken();
 		return new ReturnStatement(expression);
 	}
 	else {
 		auto expression = s.parseExpression();
-		assert(s[0] == ';');
-		s.popFront();
+		s.skipWhitespace();
+		assert(s.peekToken == ";", s);
+		s.skipToken();
 		return new ExpressionStatement(expression);
 	}
 }
@@ -230,9 +293,8 @@ Expression parseExpression(ref string s) {
 	auto expression = s.parseOperand();
 	auto backup = s;
 	s.skipWhitespace();
-	while(!s.empty && (s[0] == '+' || s[0] == '=')) {
-		auto operator = s[0 .. 1];
-		s.popFront();
+	while(s.peekToken == Token.Type.Operator) {
+		auto operator = s.fetchToken.value;
 		s.skipWhitespace();
 		auto right = s.parseOperand();
 		if(operator == "=")
@@ -247,22 +309,12 @@ Expression parseExpression(ref string s) {
 }
 
 Expression parseOperand(ref string s) {
-	assert(!s.empty);
-	if(s[0].isAlpha) {
-		size_t length = 1;
-		while(length < s.length && (s[length].isAlpha || s[length] == '_'))
-			length++;
-		auto name = s[0 .. length];
-		s = s[length .. $];
-		return new Variable(name);
-	}
-	else if(s[0].isDigit) {
-		int value = s[0] - '0';
-		s.popFront;
-		while(!s.empty && s[0].isDigit) {
-			value = value * 10 + (s[0] - '0');
-			s.popFront();
-		}
+	if(s.peekToken == Token.Type.Identifier)
+		return new Variable(s.fetchToken.value);
+	else if(s.peekToken == Token.Type.Integer) {
+		int value = 0;
+		foreach(c; s.fetchToken.value)
+			value = value * 10 + (c - '0');
 		return new IntLiteral(value);
 	}
 	else
