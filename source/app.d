@@ -434,6 +434,15 @@ Expression parsePrimary(ref string s) {
 		s.skipToken();
 		return new ArrayLiteral(elements);
 	}
+	else if(s.peekToken == "(") {
+		s.skipToken();
+		s.skipWhitespace();
+		auto expression = s.parseExpression();
+		s.skipWhitespace();
+		assert(s.peekToken == ")");
+		s.skipToken();
+		return expression;
+	}
 	else
 		assert(false);
 }
