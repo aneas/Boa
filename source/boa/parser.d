@@ -125,7 +125,19 @@ Program parseProgram(string s) {
 
 
 Statement parseStatement(ref string s) {
-	if(s.peekToken == "function") {
+	if(s.peekToken == "{") {
+		s.skipToken();
+		s.skipWhitespace();
+		Statement[] statements;
+		while(s.peekToken != "}") {
+			statements ~= s.parseStatement();
+			s.skipWhitespace();
+		}
+		assert(s.peekToken == "}");
+		s.skipToken();
+		return new BlockStatement(statements);
+	}
+	else if(s.peekToken == "function") {
 		s.skipToken();
 		s.skipWhitespace();
 		assert(s.peekToken == Token.Type.Identifier);

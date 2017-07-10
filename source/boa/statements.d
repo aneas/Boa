@@ -87,3 +87,19 @@ final class IfStatement : Statement {
 			return Action.Proceed;
 	}
 }
+
+
+final class BlockStatement : Statement {
+	Statement[] statements;
+	this(Statement[] statements) {
+		this.statements = statements;
+	}
+	override Action execute(Environment env) {
+		foreach(statement; statements) {
+			auto action = statement.execute(env);
+			if(action.isReturn)
+				return action;
+		}
+		return Action.Proceed;
+	}
+}
