@@ -28,7 +28,7 @@ Token fetchToken(ref string s, size_t length, Token.Type type) {
 
 
 Token fetchToken(ref string s) {
-	static Keywords = ["else", "function", "if", "return"];
+	static Keywords = ["else", "function", "if", "return", "while"];
 
 	if(s.empty)
 		return Token(Token.Type.Eof, s);
@@ -203,6 +203,20 @@ Statement parseStatement(ref string s) {
 			else_ = s.parseStatement();
 		}
 		return new IfStatement(condition, then_, else_);
+	}
+	else if(s.peekToken == "while") {
+		s.skipToken();
+		s.skipWhitespace();
+		assert(s.peekToken == "(");
+		s.skipToken();
+		s.skipWhitespace();
+		auto condition = s.parseExpression();
+		s.skipWhitespace();
+		assert(s.peekToken == ")");
+		s.skipToken();
+		s.skipWhitespace();
+		auto body_ = s.parseStatement();
+		return new WhileStatement(condition, body_);
 	}
 	else if(s.peekToken == "var") {
 		s.skipToken();

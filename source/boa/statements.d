@@ -89,6 +89,29 @@ final class IfStatement : Statement {
 }
 
 
+final class WhileStatement : Statement {
+	Expression condition;
+	Statement body_;
+	this(Expression condition, Statement body_) {
+		this.condition = condition;
+		this.body_     = body_;
+	}
+	override Action execute(Environment env) {
+		while(true) {
+			auto c = condition.evaluate(env).value;
+			assert(c.isBool);
+			if(c.bool_) {
+				auto action = body_.execute(env);
+				if(action.isReturn)
+					return action;
+			}
+			else
+				return Action.Proceed;
+		}
+	}
+}
+
+
 final class BlockStatement : Statement {
 	Statement[] statements;
 	this(Statement[] statements) {
