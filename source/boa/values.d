@@ -2,6 +2,7 @@ module boa.values;
 
 
 import std.algorithm : map;
+import std.array;
 import std.conv : to;
 import std.range : join;
 
@@ -45,6 +46,35 @@ final class Value {
 			case Function:        function_ = FunctionData(value.function_.parameters.dup, value.function_.closure, value.function_.body_); break;
 			case BuiltinFunction: builtinFunction = value.builtinFunction; break;
 			case Array:           arrayElements = value.arrayElements.dup; break;
+		}
+	}
+	char[] asString() const {
+		assert(isArray);
+		if(arrayElements.empty)
+			return [];
+		char[] s;
+		foreach(element; arrayElements) {
+			assert(element.isChar);
+			s ~= element.char_;
+		}
+		return s;
+	}
+	void packFFI(ref ubyte[] s) const {
+		final switch(tag) with(Tag) {
+			case Bool:            assert(false);
+			case Int:             assert(false);
+			case Function:        assert(false);
+			case BuiltinFunction: assert(false);
+
+			case Char:
+				s ~= cast(ubyte)char_;
+				break;
+
+			case Array:
+				foreach(element; arrayElements)
+					element.packFFI(s);
+				s ~= 0;
+				break;
 		}
 	}
 	override string toString() const {
