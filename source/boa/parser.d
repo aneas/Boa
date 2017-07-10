@@ -12,7 +12,7 @@ import boa.statements;
 
 
 struct Token {
-	enum Type { Whitespace, Operator, Delimiter, Keyword, Identifier, Integer, String, Eof }
+	enum Type { Whitespace, LineComment, Operator, Delimiter, Keyword, Identifier, Integer, String, Eof }
 	Type   type;
 	string value;
 	bool opEquals(Type t) const { return (type == t); }
@@ -48,6 +48,14 @@ Token fetchToken(ref string s) {
 			while(length < s.length && (s[length] == '+' || s[length] == '*' || s[length] == '=' || s[length] == '!'))
 				length++;
 			return s.fetchToken(length, Token.Type.Operator);
+
+		case '/':
+			assert(s.length >= 2);
+			assert(s[1] == '/');
+			size_t length = 2;
+			while(length < s.length && s[length] != '\n')
+				length++;
+			return s.fetchToken(length, Token.Type.LineComment);
 
 		case '"':
 			size_t length = 1;
@@ -101,7 +109,7 @@ Token peekTokenAfterWhitespace(string s) {
 
 
 void skipWhitespace(ref string s) {
-	while(s.peekToken == Token.Type.Whitespace)
+	while(s.peekToken == Token.Type.Whitespace || s.peekToken == Token.Type.LineComment)
 		s.skipToken();
 	while(!s.empty) {
 		if(s[0] == ' ' || s[0] == '\t' || s[0] == '\r' || s[0] == '\n')
