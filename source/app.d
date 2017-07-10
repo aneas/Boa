@@ -19,6 +19,18 @@ void main(string[] args) {
 	auto env = new Environment;
 	env.variables["true"] = Reference.RValue(Value.Bool(true));
 	env.variables["false"] = Reference.RValue(Value.Bool(false));
+	env.variables["=="] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
+		assert(args.length == 2);
+		auto l = args[0].value;
+		auto r = args[1].value;
+		return Reference.RValue(Value.Bool(l.equals(r)));
+	}));
+	env.variables["!="] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
+		assert(args.length == 2);
+		auto l = args[0].value;
+		auto r = args[1].value;
+		return Reference.RValue(Value.Bool(!l.equals(r)));
+	}));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
 		assert(args.length == 2);
 		auto l = args[0].value;

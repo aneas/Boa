@@ -43,8 +43,11 @@ Token fetchToken(ref string s) {
 		case ',': case ';': case '[': case ']': case '(': case ')': case '{': case '}':
 			return s.fetchToken(1, Token.Type.Delimiter);
 
-		case '+': case '*': case '=':
-			return s.fetchToken(1, Token.Type.Operator);
+		case '+': case '*': case '=': case '!':
+			size_t length = 1;
+			while(length < s.length && (s[length] == '+' || s[length] == '*' || s[length] == '=' || s[length] == '!'))
+				length++;
+			return s.fetchToken(length, Token.Type.Operator);
 
 		case '"':
 			size_t length = 1;

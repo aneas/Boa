@@ -48,6 +48,25 @@ final class Value {
 			case Array:           arrayElements = value.arrayElements.dup; break;
 		}
 	}
+	bool equals(const Value v) const {
+		if(tag != v.tag)
+			return false;
+		final switch(tag) with(Tag) {
+			case Bool:            return (bool_ == v.bool_);
+			case Int:             return (int_ == v.int_);
+			case Char:            return (char_ == v.char_);
+			case Function:        return false;
+			case BuiltinFunction: return false;
+			case Array:
+				if(arrayElements.length != v.arrayElements.length)
+					return false;
+				foreach(i, element; arrayElements) {
+					if(!element.equals(v.arrayElements[i]))
+						return false;
+				}
+				return true;
+		}
+	}
 	char[] asString() const {
 		assert(isArray);
 		if(arrayElements.empty)
