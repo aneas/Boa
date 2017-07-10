@@ -188,6 +188,13 @@ void main(string[] args) {
 						values ~= pointer;
 						break;
 
+					case "uint64":
+						assert(a.value.isULong);
+						auto pointer = new ulong;
+						*pointer = a.value.ulong_;
+						values ~= pointer;
+						break;
+
 					default:
 						assert(false);
 				}
@@ -197,6 +204,9 @@ void main(string[] args) {
 			switch(args[2].value.asString) {
 				case "sint32":
 					return Reference.RValue(Value.Int(cast(int)rc));
+
+				case "uint64":
+					return Reference.RValue(Value.ULong(cast(ulong)rc));
 
 				default:
 					assert(false);
