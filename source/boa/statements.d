@@ -66,3 +66,24 @@ final class VarStatement : Statement {
 		return Action.Proceed;
 	}
 }
+
+
+final class IfStatement : Statement {
+	Expression condition;
+	Statement then_, else_;
+	this(Expression condition, Statement then_, Statement else_) {
+		this.condition = condition;
+		this.then_     = then_;
+		this.else_     = else_;
+	}
+	override Action execute(Environment env) {
+		auto c = condition.evaluate(env).value;
+		assert(c.isBool);
+		if(c.bool_)
+			return then_.execute(env);
+		else if(else_ !is null)
+			return else_.execute(env);
+		else
+			return Action.Proceed;
+	}
+}

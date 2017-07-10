@@ -1,0 +1,9 @@
+if(true)
+	writeln(1);
+else
+	writeln(2);
+
+if(false)
+	writeln(1);
+else
+	writeln(2);
