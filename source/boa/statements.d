@@ -58,11 +58,14 @@ final class ReturnStatement : Statement {
 
 final class VarStatement : Statement {
 	string identifier;
-	this(string identifier) {
+	Expression value;
+	this(string identifier, Expression value) {
 		this.identifier = identifier;
+		this.value      = value;
 	}
 	override Action execute(Environment env) {
-		env.variables[identifier] = Reference.LValue(Value.Int(0));
+		auto value = (this.value !is null ? this.value.evaluate(env).value : Value.Int(0));
+		env.variables[identifier] = Reference.LValue(value);
 		return Action.Proceed;
 	}
 }

@@ -232,9 +232,16 @@ Statement parseStatement(ref string s) {
 		auto token = s.fetchToken();
 		assert(token == Token.Type.Identifier);
 		s.skipWhitespace();
+		Expression value = null;
+		if(s.peekToken == "=") {
+			s.skipToken();
+			s.skipWhitespace();
+			value = s.parseExpression();
+			s.skipWhitespace();
+		}
 		assert(s.peekToken == ";");
 		s.skipToken();
-		return new VarStatement(token.value);
+		return new VarStatement(token.value, value);
 	}
 	else {
 		auto expression = s.parseExpression();
