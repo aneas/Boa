@@ -194,8 +194,13 @@ void main(string[] args) {
 			}
 			ffi_arg rc;
 			ffi_call(&cif, func, &rc, values.ptr);
-			// rc now holds the result of the call
-			return Reference.RValue(Value.Int(0));
+			switch(args[2].value.asString) {
+				case "sint32":
+					return Reference.RValue(Value.Int(cast(int)rc));
+
+				default:
+					assert(false);
+			}
 		}));
 	}));
 	program.execute(env);
