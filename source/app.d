@@ -17,6 +17,8 @@ void main(string[] args) {
 	auto program  = parseProgram(contents);
 
 	auto env = new Environment;
+	env.variables["true"] = Reference.RValue(Value.Bool(true));
+	env.variables["false"] = Reference.RValue(Value.Bool(false));
 	env.variables["+"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
 		assert(args.length == 2);
 		auto l = args[0].value;
