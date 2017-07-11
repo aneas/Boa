@@ -4,6 +4,7 @@ module boa.parser;
 import std.algorithm : canFind;
 import std.array;
 import std.ascii : isDigit;
+import std.conv : to;
 import std.uni : isAlpha;
 
 import boa.expressions;
@@ -12,7 +13,7 @@ import boa.statements;
 
 
 struct Token {
-	enum Type { Whitespace, LineComment, Operator, Delimiter, Keyword, Identifier, Integer, String, Eof }
+	enum Type { Whitespace, LineComment, Operator, Delimiter, Keyword, Identifier, Integer, Float, String, Eof }
 	Type   type;
 	string value;
 	bool opEquals(Type t) const { return (type == t); }
@@ -84,10 +85,17 @@ Token fetchToken(ref string s) {
 				size_t length = 1;
 				while(length < s.length && s[length].isDigit)
 					length++;
-				return s.fetchToken(length, Token.Type.Integer);
+				if(length + 1 < s.length && s[length] == '.' && s[length + 1].isDigit) {
+					length += 2;
+					while(length < s.length && s[length].isDigit)
+						length++;
+					return s.fetchToken(length, Token.Type.Float);
+				}
+				else
+					return s.fetchToken(length, Token.Type.Integer);
 			}
 			else
-				assert(false);
+				assert(false, s);
 	}
 }
 
@@ -314,6 +322,10 @@ Expression parsePrimary(ref string s) {
 		foreach(c; s.fetchToken.value)
 			value = value * 10 + (c - '0');
 		return new IntLiteral(value);
+	}
+	else if(s.peekToken == Token.Type.Float) {
+		double value = s.fetchToken.value.to!double;
+		return new DoubleLiteral(value);
 	}
 	else if(s.peekToken == "[") {
 		s.skipToken();

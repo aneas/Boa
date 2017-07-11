@@ -21,6 +21,17 @@ final class IntLiteral : Expression {
 }
 
 
+final class DoubleLiteral : Expression {
+	double value;
+	this(double value) {
+		this.value = value;
+	}
+	override Reference evaluate(Environment env) {
+		return Reference.RValue(Value.Double(value));
+	}
+}
+
+
 final class StringLiteral : Expression {
 	string value;
 	this(string value) {
