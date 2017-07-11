@@ -53,6 +53,13 @@ void main(string[] args) {
 		writeln();
 		return Reference.RValue(Value.Int(0));
 	}));
+	env.variables["malloc"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
+		import core.stdc.stdlib;
+		assert(args.length == 1);
+		auto l = args[0].value;
+		assert(l.isInt);
+		return Reference.RValue(Value.ULong(cast(ulong)malloc(l.int_)));
+	}));
 	env.variables["ffi"] = Reference.RValue(Value.BuiltinFunction((Reference[] args) {
 		import std.string;
 		import core.sys.posix.dlfcn;
