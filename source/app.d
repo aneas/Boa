@@ -181,11 +181,23 @@ void main(string[] args) {
 			foreach(i, a; arguments) {
 				switch(args[3 + i].value.asString) {
 					case "pointer":
-						ubyte[] buffer;
-						a.value.packFFI(buffer);
-						auto pointer = new void*;
-						*pointer = buffer.ptr;
-						values ~= pointer;
+						if(a.value.isULong) {
+							auto pointer = new void*;
+							*pointer = cast(void*)a.value.ulong_;
+							values ~= pointer;
+						}
+						else if(a.value.isInt) {
+							auto pointer = new void*;
+							*pointer = cast(void*)a.value.int_;
+							values ~= pointer;
+						}
+						else {
+							ubyte[] buffer;
+							a.value.packFFI(buffer);
+							auto pointer = new void*;
+							*pointer = buffer.ptr;
+							values ~= pointer;
+						}
 						break;
 
 					case "sint32":
@@ -195,10 +207,26 @@ void main(string[] args) {
 						values ~= pointer;
 						break;
 
+					case "sint64":
 					case "uint64":
-						assert(a.value.isULong);
-						auto pointer = new ulong;
-						*pointer = a.value.ulong_;
+						if(a.value.isULong) {
+							auto pointer = new ulong;
+							*pointer = a.value.ulong_;
+							values ~= pointer;
+						}
+						else if(a.value.isInt) {
+							auto pointer = new ulong;
+							*pointer = a.value.int_;
+							values ~= pointer;
+						}
+						else
+							assert(false);
+						break;
+
+					case "double":
+						assert(a.value.isDouble);
+						auto pointer = new double;
+						*pointer = a.value.double_;
 						values ~= pointer;
 						break;
 
@@ -209,9 +237,13 @@ void main(string[] args) {
 			ffi_arg rc;
 			ffi_call(&cif, func, &rc, values.ptr);
 			switch(args[2].value.asString) {
+				case "void":
+					return Reference.RValue(Value.Int(0));
+
 				case "sint32":
 					return Reference.RValue(Value.Int(cast(int)rc));
 
+				case "pointer":
 				case "uint64":
 					return Reference.RValue(Value.ULong(cast(ulong)rc));
 
